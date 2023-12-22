@@ -32,7 +32,7 @@ logging.basicConfig(
     format='%(asctime)s, %(levelname)s, %(message)s',
     level=logging.DEBUG,
     encoding='utf-8'
-    )
+)
 
 
 def check_tokens():
@@ -45,8 +45,10 @@ def check_tokens():
             )
             return False
     global PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
-    if (PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None or
-            TELEGRAM_CHAT_ID is None):
+    if (
+        PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None
+        or TELEGRAM_CHAT_ID is None
+    ):
         logging.critical(
             'Критическая ошибка: недоступны переменные окружения!'
         )
