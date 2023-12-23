@@ -1,14 +1,16 @@
-"""Бот проверки статуса домашних работ в Яндес.Практикум."""
+"""Бот проверки статуса домашних работ в Яндекс.Практикум."""
 
 import logging
 import os
 import requests
+import sys
 import telegram
 import time
 
 from dotenv import load_dotenv
+from http import HTTPStatus
 
-from exceptions import EndPointError, UnexpectedStatusError, TokenError
+from exceptions import EndPointError, UnexpectedStatusError, StatusCodeError
 
 load_dotenv()
 
@@ -28,27 +30,9 @@ HOMEWORK_VERDICTS = {
 }
 
 
-logging.basicConfig(
-    format='%(asctime)s, %(levelname)s, %(message)s',
-    level=logging.DEBUG,
-    encoding='utf-8'
-)
-
-
 def check_tokens():
     """Функция проверяет доступность переменных окружения."""
-    tokens = ['PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID']
-    for token in tokens:
-        if token not in globals():
-            logging.critical(
-                'Критическая ошибка: недоступны переменные окружения!'
-            )
-            return False
-    global PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
-    if (
-        PRACTICUM_TOKEN is None or TELEGRAM_TOKEN is None
-        or TELEGRAM_CHAT_ID is None
-    ):
+    if not all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
         logging.critical(
             'Критическая ошибка: недоступны переменные окружения!'
         )
@@ -58,9 +42,8 @@ def check_tokens():
 
 def send_message(bot, message):
     """Функция отправляет сообщение в Telegram чат."""
-    chat_id = TELEGRAM_CHAT_ID
     try:
-        bot.send_message(chat_id, message)
+        bot.send_message(TELEGRAM_CHAT_ID, message)
         logging.debug(
             'Сообщение отправлено!'
         )
@@ -73,7 +56,6 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Функция делает запрос к эндпоинту API-сервиса."""
     payload = {'from_date': timestamp}
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
     try:
         api_answer = requests.get(
             ENDPOINT, headers=HEADERS, params=payload
@@ -83,12 +65,11 @@ def get_api_answer(timestamp):
             'Ошибка! Cбой при запросе к эндпоинту!'
         )
         message = 'Cбой при запросе к эндпоинту!'
-        send_message(bot, message)
-    if api_answer.status_code != 200:
-        logging.error('Ошибка! Недоступен эндпоинт!')
-        message = 'Недоступен эндпоинт!'
-        send_message(bot, message)
-        raise EndPointError
+        raise EndPointError(message)
+    if api_answer.status_code != HTTPStatus.OK:
+        logging.error('Ошибка! Код ответа сервера не соотвествует ожидаемому!')
+        message = 'Код ответа не соотвествует ожидаемому!'
+        raise StatusCodeError(message)
     response = api_answer.json()
     return response
 
@@ -97,15 +78,14 @@ def check_response(response):
     """Функция возвращает информацию обо всех домашних работах."""
     try:
         homeworks = response['homeworks']
-        if type(homeworks) is not list:
-            raise TypeError
     except KeyError:
         logging.error(
             'Ошибка! Отсутствие ожидаемых ключей в ответе API!'
         )
         message = 'Отсутствие ожидаемых ключей в ответе API!'
-        bot = telegram.Bot(token=TELEGRAM_TOKEN)
-        send_message(bot, message)
+        raise KeyError(message)
+    if type(homeworks) is not list:
+        raise TypeError
     return homeworks
 
 
@@ -124,14 +104,20 @@ def parse_status(homework):
 
 def main():
     """Основная логика работы бота."""
+    """Логгер проекта."""
+    logging.basicConfig(
+        format='%(asctime)s, %(levelname)s, %(message)s, %(lineno)s',
+        level=logging.DEBUG,
+        encoding='utf-8'
+    )
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
-    current_statuses = {}
-    if check_tokens() is False:
+    if not check_tokens():
         message = ('Критическая ошибка: отсутствуют'
                    'переменные окружения. Работа программы приостановлена.')
         send_message(bot, message)
-        raise TokenError
+        sys.exit('Отсутствуют переменные окружения.')
+    timestamp = int(time.time())
+    current_statuses = {}
     while True:
         try:
             api_resp = get_api_answer(timestamp)

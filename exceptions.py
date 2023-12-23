@@ -1,6 +1,12 @@
 """Исключения."""
 
 
+class StatusCodeError(Exception):
+    """Неожиданный статус домашней работы."""
+
+    pass
+
+
 class EndPointError(Exception):
     """Недоступность эндпоинта."""
 
@@ -9,11 +15,5 @@ class EndPointError(Exception):
 
 class UnexpectedStatusError(Exception):
     """Неожиданный статус домашней работы."""
-
-    pass
-
-
-class TokenError(Exception):
-    """Ошибка в переменных окружения."""
 
     pass
